@@ -1,0 +1,21 @@
+
+------------------------------------------------------------------------------
+OVERVIEW
+  This package aims to provide a way to manipulate pointcloud "tiles" 
+  (relatively flat pointclouds).
+
+------------------------------------------------------------------------------
+FILES
+
+pytile.py
+  Main package. Contains objects and methods for manimpulating pointcloud
+  "tiles."   
+
+_log
+  Contains counter for naming files.
+
+OLD
+  Anything in this folder can be deleted with no reprecussions. Used to store
+  old code and files.
+ 
+-----------------------------------------------------------------------------

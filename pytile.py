@@ -12,8 +12,8 @@ class Tile:
 
     def __init__(self, fileordata, father=None):
         self.driver(fileordata)
-        self.alignData()
-        self.getProperties()
+        #self.alignData()
+        #self.getProperties()
         print('init done')
             
         #self.readFile(filepath)s 
@@ -43,7 +43,7 @@ class Tile:
         x = self.data[0]    # add if origin != 0
         y = self.data[1]    # add if origin != 0
         r = np.hypot(x,y)
-        th = np.arctan2[x, y]
+        th = np.arctan2(x, y)
         th_new = np.add(th,phi)
         x_new = r * np.cos(th_new)
         y_new = r * np.sin(th_new)
@@ -68,15 +68,17 @@ class Tile:
         self.minxyz = [min(data[0]), min(data[1]), min(data[2])]
         
     
-    def saveFile(self):
+    def saveFile(self, filepath=None):
         desc = self.desc
         size = self.size
         data = np.array(self.data)
         dec = 5 
+        if filepath == None:
+            filepath = 'lumpsave.txt'
         
-        file_a = open("%s.txt"%(desc),"w") 
+        file_a = open(filepath,"w") 
         for i in range(size):
-            string = ' '.join(map(str, data[0:3, i]))
+            string = ' '.join(map(str, data[:,i]))
             file_a.write(string + "\n")
         file_a.close()
         print('File Saved')
@@ -110,7 +112,7 @@ class Tile:
             lines = lines[header:len(lines)]
             
             column = len(lines[0].split())
-            print(column)
+    
             data = []            
             if column >= 3:
                 self.x = [float(line.split()[0]) for line in lines]
@@ -122,7 +124,7 @@ class Tile:
             if column >= 4:
                 self.i = [float(line.split()[3]) for line in lines]
                 data.append(self.i)
-            if column == 7:
+            if column >= 7:
                 self.r = [float(line.split()[4]) for line in lines]
                 self.g = [float(line.split()[5]) for line in lines]
                 self.b = [float(line.split()[6]) for line in lines]
@@ -144,6 +146,10 @@ class Tile:
         return header
         
     def filtering(self):
+        pass
+    
+    def toImg(self):
+        # Saves the data as an image using opencv
         pass
     
 class Point:

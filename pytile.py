@@ -6,6 +6,7 @@ Created on Fri Nov  9 20:36:10 2018
 """
 import numpy as np
 import nameop as op
+#import cv2 as cv
 #import pcl
 
 class Tile:
@@ -16,7 +17,7 @@ class Tile:
         if align == True:
             self.alignData()
         
-        print('init done')
+        print('Init Completed')
             
 
     
@@ -24,8 +25,22 @@ class Tile:
     # USER METHODS
     #---------------------------------------------------------
     
-    # Rotoate the cloud by angle theta on axis(x,y)
-    def rotZ(self, phi, origin=(0,0)):
+    # Cut a square pointcloud from the original
+    def punch(self, origin, shape):
+        a = self.data
+        print(len(a[0]))
+        b = self.rightBound( origin, shape, a)
+        print(len(b[0]))
+        c = self.leftBound( origin, shape, b)
+        print(len(c[0]))
+        d = self.upBound( origin, shape, c)
+        print(len(d[0]))
+        e = self.downBound( origin, shape, d)
+        print(len(e[0]))
+        return e
+    
+    # Rotate the entire point cloud about the z axis
+    def rotZ(self, phi):
         xs = self.data[0]    # add if origin != 0
         ys = self.data[1]    # add if origin != 0
         rs = np.hypot(xs,ys)
@@ -36,6 +51,7 @@ class Tile:
         self.data[0] = xs_new
         self.data[1] = ys_new
         
+    # Rotate the entire point cloud about the y axis
     def rotY(self, phi):
         xs = self.data[0]    # add if origin != 0
         zs = self.data[2]    # add if origin != 0
@@ -52,18 +68,34 @@ class Tile:
         self.data[1] = np.array(self.data[1]) + xyz[1]
         self.data[2] = np.array(self.data[2]) + xyz[2]
         
-    def saveFile(self, filepath=None):
+    def saveFile(self, filepath=None, data=None):
         desc = self.name.desc
-        size = self.size
-        data = np.array(self.data)
         dec = 5 # For rounding
         
+        if data is None:
+            data = np.array(self.data)
+            size = self.size
+            columns = self.columns
+        else:
+            data = data
+            size = len(data[0])
+            columns = len(data)
+            
         if filepath == None:
             filepath = '%s.txt'%(desc)
         
-        file_a = open(filepath,"w") 
+        file_a = open(filepath,"w")
+        
+        data_new = []
+        for i in range(columns):
+            if i < 3:
+                data_new.append(list(map(float, np.round(data[i,:], dec))))
+            else:
+                data_new.append(list(map(int, data[i,:])))
+                
         for i in range(size):
-            string = ' '.join(map(str, data[:,i]))
+            point = [dtype[i] for dtype in data_new]
+            string = ' '.join(map(str, point))
             file_a.write(string + "\n")
         file_a.close()
         print('File Saved')
@@ -76,6 +108,7 @@ class Tile:
     # INTERNAL METHODS
     #---------------------------------------------------------
     
+    # Determines how data should be interpreted by the Tile
     def driver(self, fileordata):
         if isinstance(fileordata, str):
             self.filepath = fileordata
@@ -108,7 +141,8 @@ class Tile:
         
         phi = np.pi/2 - th_mod
         return phi
-        
+    
+    # Calculates a set of properties for the tile    
     def getProperties(self):
         xs = self.data[0]
         ys = self.data[1]
@@ -117,14 +151,16 @@ class Tile:
         self.minxyz = np.array([min(xs), min(ys), min(zs)])
         self.center = np.array([np.mean(xs), np.mean(ys), np.mean(zs)])
         self.stdev = np.std(ys)
-          
+        self.shape = (max(xs)-min(xs), max(zs)-min(zs) )
+    
+    # Reads and interprets columnar xyzirgb data       
     def readFile(self, filepath):
         with open(filepath) as f:
             lines = f.readlines()            
             header = self.getHeader(lines)
             lines = lines[header:len(lines)]
-            
             column = len(lines[0].split())
+            self.columns = column
     
             data = []            
             if column >= 3:
@@ -145,8 +181,8 @@ class Tile:
                 data.append(self.g)                
                 data.append(self.b)
         return np.array(data)
-       
-       
+     
+    # Gets the line lenght of the header so i can be dismissed
     def getHeader(self, lines):
         key = True
         header = 0        
@@ -157,12 +193,54 @@ class Tile:
             else:
                 header = header + 1
         return header
-        
-    def filtering(self):
-        pass
+    
+    # Vertical Right boundary for segmenting tile    
+    def rightBound(self, origin, shape, data):
+        d_new = []
+        bound = origin[0] + shape[0]/2
+        xs = data[0]
+        for i in range(len(xs)):
+            if xs[i] < bound:
+                d = [dtype[i] for dtype in data]
+                d_new.append(d)
+        return np.transpose(d_new)
+    
+    # Vertical Left boundary for segmenting tile 
+    def leftBound(self, origin, shape, data):
+        d_new = []
+        bound = origin[0] - shape[0]/2
+        xs = data[0]
+        for i in range(len(xs)):
+            if xs[i] > bound:
+                d = [dtype[i] for dtype in data]
+                d_new.append(d)
+        return np.transpose(d_new)
+    
+    # Horizontal Upper boundary for segmenting tile
+    def upBound(self, origin, shape, data):
+        d_new = []
+        bound = origin[0] + shape[0]/2
+        zs = data[2]
+        for i in range(len(zs)):
+            if zs[i] < bound:
+                d = [dtype[i] for dtype in data]
+                d_new.append(d)
+        return np.transpose(d_new)
+    
+    # Horizontal Lower boundary for segmenting tile
+    def downBound(self, origin, shape, data):
+        d_new = []
+        bound = origin[0] - shape[0]/2
+        zs = data[2]
+        for i in range(len(zs)):
+            if zs[i] > bound:
+                d = [dtype[i] for dtype in data]
+                d_new.append(d)
+        return np.transpose(d_new)
     
 
 
+                    
 ##############################################################################
     
 class Point:
@@ -189,18 +267,15 @@ class Stamp:
 
 # Unimplimented Functions
         
-
-
-        
-
-
     
 if __name__ == "__main__":
-    tile = Tile('lump_5ft_lvl3_inches.pts', align=False)
-    tile.rotZ(35*np.pi/180)
+    tile = Tile('lump_5ft_lvl3_inches.pts')
     
-    tile.saveFile('offset.txt')
+    smol = tile.punch((0,0), (12,12))
+    tile_1 = Tile(smol, align=False)
+    #tile.saveFile('smol_tile.txt', smol)
+    #tile.saveFile('improved_save_2.txt')
     
     
     #tile = Tile('zeros.txt')
-    #tile.saveFile()
+    #tile_1.saveFile()

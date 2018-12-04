@@ -5,23 +5,83 @@ Created on Fri Nov  9 20:36:10 2018
 @author: js_en
 """
 import numpy as np
-import math as ma
+import nameop as op
 #import pcl
 
 class Tile:
 
-    def __init__(self, fileordata, father=None):
+    def __init__(self, fileordata, father=None, align=True):
         self.driver(fileordata)
-        #self.alignData()
-        #self.getProperties()
+        self.getProperties()
+        if align == True:
+            self.alignData()
+        
         print('init done')
             
-        #self.readFile(filepath)s 
+
+    
+    #---------------------------------------------------------
+    # USER METHODS
+    #---------------------------------------------------------
+    
+    # Rotoate the cloud by angle theta on axis(x,y)
+    def rotZ(self, phi, origin=(0,0)):
+        xs = self.data[0]    # add if origin != 0
+        ys = self.data[1]    # add if origin != 0
+        rs = np.hypot(xs,ys)
+        ths = np.arctan2(ys, xs)
+        ths_new = np.add(ths, phi)
+        xs_new = rs * np.cos(ths_new)
+        ys_new = rs * np.sin(ths_new)
+        self.data[0] = xs_new
+        self.data[1] = ys_new
+        
+    def rotY(self, phi):
+        xs = self.data[0]    # add if origin != 0
+        zs = self.data[2]    # add if origin != 0
+        rs = np.hypot(xs,zs)
+        ths = np.arctan2(zs, xs)
+        ths_new = np.add(ths, phi)
+        xs_new = rs * np.cos(ths_new)
+        zs_new = rs * np.sin(ths_new)
+        self.data[0] = xs_new
+        self.data[2] = zs_new
+    
+    def shiftXYZ(self, xyz):
+        self.data[0] = np.array(self.data[0]) + xyz[0]
+        self.data[1] = np.array(self.data[1]) + xyz[1]
+        self.data[2] = np.array(self.data[2]) + xyz[2]
+        
+    def saveFile(self, filepath=None):
+        desc = self.name.desc
+        size = self.size
+        data = np.array(self.data)
+        dec = 5 # For rounding
+        
+        if filepath == None:
+            filepath = '%s.txt'%(desc)
+        
+        file_a = open(filepath,"w") 
+        for i in range(size):
+            string = ' '.join(map(str, data[:,i]))
+            file_a.write(string + "\n")
+        file_a.close()
+        print('File Saved')
+    
+    def toImg(self):
+        # Saves the data as an image using opencv
+        pass
+    
+    #---------------------------------------------------------
+    # INTERNAL METHODS
+    #---------------------------------------------------------
+    
     def driver(self, fileordata):
         if isinstance(fileordata, str):
             self.filepath = fileordata
-            self.ext = self.getExt(fileordata)
-            self.desc = self.getDesc(fileordata)
+            self.name = op.NameOp(self.filepath)
+#            self.ext = getExt(fileordata)
+#            self.desc = getDesc(fileordata)
             self.data = self.readFile(fileordata)
         else:
             self.filepath = None
@@ -33,78 +93,31 @@ class Tile:
             
     def alignData(self):
         self.getProperties()
-        #if self.properties ~= aligned properties
-        
-        #self.rotate()
-        self.data = self.data
-        
-    # Rotoate the cloud by angle theta on axis(x,y)
-    def rotateZ(self, phi, origin=(0,0)):
-        x = self.data[0]    # add if origin != 0
-        y = self.data[1]    # add if origin != 0
-        r = np.hypot(x,y)
-        th = np.arctan2(x, y)
-        th_new = np.add(th,phi)
-        x_new = r * np.cos(th_new)
-        y_new = r * np.sin(th_new)
-        self.data[0] = x_new
-        self.data[1] = y_new
+        self.rotZ(self.getRot())
+        self.getProperties()
+        self.shiftXYZ(-tile.center)
+        self.name.addOperation('aligned')
     
     # Ge the rotation angle needed to ge the cloud to touch the YZ-plane
     def getRot(self, origin=(0,0)):     
-        x = self.data[0]
-        y = self.data[1]
+        x = self.center[0]
+        y = self.center[1]
         # create list of rotations
-        th = np.arctan2[x, y]       # Make sure the xy order is correct
-        th_pos = [element % 360 for element in th]    # make list positive         
+        th = np.arctan2(y, x)       # Make sure the xy order is correct
+        th_mod = th % (2*np.pi)    # make list positive  
         
-        phi = np.pi - max(th_pos)
+        phi = np.pi/2 - th_mod
         return phi
         
-        
     def getProperties(self):
-        data = self.data
-        self.maxxyz = [max(data[0]), max(data[1]), max(data[2])]
-        self.minxyz = [min(data[0]), min(data[1]), min(data[2])]
-        
-    
-    def saveFile(self, filepath=None):
-        desc = self.desc
-        size = self.size
-        data = np.array(self.data)
-        dec = 5 
-        if filepath == None:
-            filepath = 'lumpsave.txt'
-        
-        file_a = open(filepath,"w") 
-        for i in range(size):
-            string = ' '.join(map(str, data[:,i]))
-            file_a.write(string + "\n")
-        file_a.close()
-        print('File Saved')
-    
-    
-    def getFilename(self, filepath):
-        pathlist = filepath.split('/')
-        size = len(pathlist)        
-        filename = pathlist[size-1]
-        return filename
-        
-    def getExt(self, filepath):
-        filename = self.getFilename(filepath)
-        namelist = filename.split('.')
-        size = len(namelist)
-        ext = namelist[size-1]
-        return ext
-        
-    def getDesc(self, filepath):
-        filename = self.getFilename(filepath)
-        namelist = filename.split('.')
-        size = len(namelist)
-        namelist = namelist[0:size-1]
-        desc = '.'.join(namelist) 
-        return desc
-        
+        xs = self.data[0]
+        ys = self.data[1]
+        zs = self.data[2]
+        self.maxxyz = np.array([max(xs), max(ys), max(zs)])
+        self.minxyz = np.array([min(xs), min(ys), min(zs)])
+        self.center = np.array([np.mean(xs), np.mean(ys), np.mean(zs)])
+        self.stdev = np.std(ys)
+          
     def readFile(self, filepath):
         with open(filepath) as f:
             lines = f.readlines()            
@@ -131,7 +144,7 @@ class Tile:
                 data.append(self.r)                
                 data.append(self.g)                
                 data.append(self.b)
-        return data
+        return np.array(data)
        
        
     def getHeader(self, lines):
@@ -148,9 +161,9 @@ class Tile:
     def filtering(self):
         pass
     
-    def toImg(self):
-        # Saves the data as an image using opencv
-        pass
+
+
+##############################################################################
     
 class Point:
     
@@ -176,36 +189,18 @@ class Stamp:
 
 # Unimplimented Functions
         
-def writeFile(self, filename, data):
-    string = str(data)        
-    file_a = open("file_data/%d_%s.txt" %(self.file_num, filename),"a")  
-    file_a.write(string + "\n")
-    file_a.close()
-    
-def readFileNum(self):
-    file_a = open("_log/memory_file.txt","r")
-    number = int(file_a.read()) + 1
-    file_a.close()
-   
-    file_a = open("_log/memory_file.txt","w")
-    file_a.write(str(number))    
-    file_a.close()
-
-    return number
 
 
-def addOperation(self, string):
-    if self.desc != None:
-        desc = self.desc.split('_')
-        desc.append(string)
-        self.desc = '_'.join(desc)
-    else:
-        self.desc = string
         
 
 
     
 if __name__ == "__main__":
-    tile = Tile('lump_5ft_lvl3_inches.pts')
+    tile = Tile('lump_5ft_lvl3_inches.pts', align=False)
+    tile.rotZ(35*np.pi/180)
+    
+    tile.saveFile('offset.txt')
+    
+    
     #tile = Tile('zeros.txt')
     #tile.saveFile()

@@ -6,7 +6,7 @@ Created on Fri Nov  9 20:36:10 2018
 """
 import numpy as np
 import nameop as op
-#import cv2 as cv
+import cv2 as cv
 #import pcl
 
 class Tile:
@@ -16,6 +16,7 @@ class Tile:
         self.getProperties()
         if align == True:
             self.alignData()
+        self.shiftXYZ(-self.center)
         
         print('Init Completed')
             
@@ -128,7 +129,7 @@ class Tile:
         self.getProperties()
         self.rotZ(self.getRot())
         self.getProperties()
-        self.shiftXYZ(-tile.center)
+        self.shiftXYZ(-self.center)
         self.name.addOperation('aligned')
     
     # Ge the rotation angle needed to ge the cloud to touch the YZ-plane
@@ -238,11 +239,144 @@ class Tile:
                 d_new.append(d)
         return np.transpose(d_new)
     
+    def segment(self, pix):
+        print('Starting Segmentation')
+        self.tree = TileTree(self.data, pix, self.shape)
+        pass
+
+        
+    
 
 
                     
 ##############################################################################
+
+class TileTree:
+    def __init__(self, data, pix, shape):
+        print('Populating TileTree')
+        self.data = data
+        self.pix = pix
+        self.shape = max(shape)
+        self.getTreeProperties()
+        
+        self.layer = 0
+        self.center = (0,0)
+        
+        self.root = TileNode(data, self.center, self.world, 
+                             self.layer, self.layers, self.shape)
+        
     
+    def getTreeProperties(self):
+        n = 0
+        world = 0
+        while world < self.shape:
+            n += 1
+            world = self.pix * 2 ** n
+        self.layers = n
+        self.world = world
+        
+    def pullData(self):
+        self.listing = self.root.pullData()
+                
+            
+    
+class TileNode:
+    def __init__(self, data, center, world, layer, layermax, shape):
+        self.data = data
+        self.center = center
+        self.world = world
+        self.layer = layer
+        self.layermax = layermax
+        self.shape = shape
+        
+        self.size = len(data[0])
+        if layer == layermax:
+            print(self.size)
+        self.branches = [None, None, None, None]
+        
+        self.splitLogic()
+        
+    # pulls lowest layer data tot he surface
+    # stores [[array of centers],[array of data]]     
+    def pullData(self):
+        store = [[],[]]
+        if self.layer == self.layermax:
+            store = [[self.center],[self.data]]
+            return store
+        elif self.layer != self.layermax:
+            for i in range(4):
+                if self.branches[i] is not None:
+                    store[0] = store[0] + self.branches[i].pullData()[0]
+                    store[1] = store[1] + self.branches[i].pullData()[1]
+            return store
+                
+    
+    def splitLogic(self):
+        world = self.world
+        layer = self.layer + 1
+        layermax = self.layermax        
+        if layer <= layermax:
+            datas = self.splitData()
+            centers = self.calcCenters()
+            for i in range(len(self.branches)):
+                # Do not insert empty list
+                if len(datas[i]) > 0:
+                    self.branches[i] = TileNode(datas[i], centers[i],
+                                                world, layer, layermax, 
+                                                self.shape)
+            
+    def calcCenters(self):
+        x,z = self.center
+        world = self.world
+        layer = self.layer
+        offset = (world/2)/(2**(layer+1))
+        c_ee = (x + offset, z + offset)
+        c_oe = (x - offset, z + offset)
+        c_eo = (x + offset, z - offset)
+        c_oo = (x - offset, z - offset)
+        return [c_ee, c_oe, c_eo, c_oo]
+        
+    
+    def splitData(self):
+        data = self.data
+        xs = self.data[0]
+        zs = self.data[2]
+        xbound = self.center[0]
+        zbound = self.center[1]
+        # Creating bins for data
+        d_ee = []
+        d_oe = []
+        d_eo = []
+        d_oo = []
+        # Sorting data into bins
+        for i in range(self.size):
+            if xs[i] >= xbound and zs[i] >= zbound:
+                d = [dtype[i] for dtype in data]
+                d_ee.append(d)
+            elif xs[i] < xbound and zs[i] >= zbound:
+                d = [dtype[i] for dtype in data]
+                d_oe.append(d)
+            elif xs[i] >= xbound and zs[i] < zbound:
+                d = [dtype[i] for dtype in data]
+                d_eo.append(d)
+            else: #xs[i] < xbound and zs[i] < zbound:
+                d = [dtype[i] for dtype in data]
+                d_oo.append(d)
+        # Transposing binned data for format
+        d_ee = np.transpose(d_ee)
+        d_oe = np.transpose(d_oe)
+        d_eo = np.transpose(d_eo)
+        d_oo = np.transpose(d_oo)
+        # Deleting old data from tree
+        self.data = None
+        # returning data array
+        return [d_ee, d_oe, d_eo, d_oo]
+        
+    
+    
+
+            
+        
 class Point:
     
     def __init__(self):
@@ -269,10 +403,11 @@ class Stamp:
         
     
 if __name__ == "__main__":
-    tile = Tile('lump_5ft_lvl3_inches.pts')
+    father = Tile('lump_5ft_lvl3_inches.pts')
     
-    smol = tile.punch((0,0), (12,12))
-    tile_1 = Tile(smol, align=False)
+    small = father.punch((0,0), (12,12))
+    tile = Tile(small, align=False)
+    tile.segment(2)
     #tile.saveFile('smol_tile.txt', smol)
     #tile.saveFile('improved_save_2.txt')
     

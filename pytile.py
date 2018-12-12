@@ -7,6 +7,7 @@ Created on Fri Nov  9 20:36:10 2018
 import numpy as np
 import nameop as op
 import cv2 as cv
+import types
 #import pcl
 
 class Tile:
@@ -22,9 +23,9 @@ class Tile:
             
 
     
-    #---------------------------------------------------------
+    ##########################################################################
     # USER METHODS
-    #---------------------------------------------------------
+    ##########################################################################
     
     # Cut a square pointcloud from the original
     def punch(self, origin, shape):
@@ -100,14 +101,104 @@ class Tile:
             file_a.write(string + "\n")
         file_a.close()
         print('File Saved')
+        
+    # Saves the data as an image using opencv
+    def toImg(self, pix, scale=0.1, save=True): #(y/scale) = brightness
+        #get Segmented the data and locations
+        self.segment(pix) # Leaf consists of [[locations],[Data]]
+        #transform locations into pixel positions
+        pixposs = self.getPixPos(pix, self.tree.leafs[0])  
+        #convert leaf data -> centroid -> height -> grayscale
+        centroids = self.getCentroids(self.tree.leafs[1])
+        heights = [centroid[1] for centroid in centroids]
+        grays = [int(round((height/scale)+256/2)) for height in heights]  
+        print('checking')
+        print(len(pixposs))
+        print(len(grays))
+        
+        img = self.mapColors(pix, pixposs, grays)
+        
+        if save == True:
+            cv.imwrite('test_Display_img.jpg', self.pixResize(img))
+            cv.imwrite('test_Real_Img.jpg', img)
+        return img
     
-    def toImg(self):
-        # Saves the data as an image using opencv
-        pass
+    def pixResize(self, img):
+        N = len(img)
+        if N < 256:
+            goal = 5*N
+            N = len(img)
+            r = int(goal/N) #r = ratio
+            img_new = np.full([goal,goal,3], None)
+            for u in range(N):
+                for v in range(N):
+                    for k in range(3):
+                        img_new[r*u:r*(u+1),r*v:r*(v+1),k] = np.full([r,r],img[u,v,k]) 
+            img_new = img_new.astype(np.uint8)
+        else:
+            img_new = img
+        return img_new
+        
     
-    #---------------------------------------------------------
+    ##########################################################################
     # INTERNAL METHODS
-    #---------------------------------------------------------
+    ##########################################################################
+    
+    def mapColors(self,pix, positions, grays):
+        N = int(round(min(self.shape)/pix))
+        bound = min(self.shape)/pix
+        img = np.full((N,N,3), 0, dtype='uint8')
+        i = 0
+        for position in positions:
+            # Screen positions to see if out of bounds
+            if min(position) >= 0 :
+                if max(position) <= bound :
+                    u = position[1]
+                    v = position[0]
+                    img[u,v] = [grays[i]]*3
+            i += 1
+        return img
+    
+    # Get pixle positions from leaf centers
+    def getPixPos2(self, pix, centers):
+        N = int(round(min(self.shape)/pix))
+        offset = N/2
+        pixpos = []
+        for center in centers:
+            if max(map(abs, center)) <= N:
+                posx = int(center[0]/pix + offset)
+                posy = int(center[1]/pix + offset)
+                pixpos.append((posx, posy))
+        return pixpos
+    
+    def getPixPos(self, pix, centers):
+        N = int(round(min(self.shape)/pix))
+        offset = N/2
+        pixpos = []
+        for center in centers:
+            posx = int(center[0]/pix + offset)
+            posy = int(center[1]/pix + offset)
+            pixpos.append((posx, posy))
+        return pixpos
+                
+                
+                
+    
+    def getCentroids(self, datas):
+        centroids = []
+        for data in datas:
+            xs = data[0]
+            ys = data[1]
+            zs = data[2]
+            centroid = (np.mean(xs), np.mean(ys), np.mean(zs))
+            centroids.append(centroid)
+        return centroids
+            
+    
+    def segment(self, pix):
+        print('Starting Segmentation')
+        self.tree = TileTree(self.data, pix, self.shape)
+        self.leafs = self.tree.pullLeafs()
     
     # Determines how data should be interpreted by the Tile
     def driver(self, fileordata):
@@ -239,10 +330,7 @@ class Tile:
                 d_new.append(d)
         return np.transpose(d_new)
     
-    def segment(self, pix):
-        print('Starting Segmentation')
-        self.tree = TileTree(self.data, pix, self.shape)
-        pass
+
 
         
     
@@ -275,10 +363,10 @@ class TileTree:
         self.layers = n
         self.world = world
         
-    def pullData(self):
-        self.listing = self.root.pullData()
+    def pullLeafs(self):
+        self.leafs = self.root.pullLeaf()
                 
-            
+##############################################################################            
     
 class TileNode:
     def __init__(self, data, center, world, layer, layermax, shape):
@@ -298,7 +386,7 @@ class TileNode:
         
     # pulls lowest layer data tot he surface
     # stores [[array of centers],[array of data]]     
-    def pullData(self):
+    def pullLeaf(self):
         store = [[],[]]
         if self.layer == self.layermax:
             store = [[self.center],[self.data]]
@@ -306,8 +394,8 @@ class TileNode:
         elif self.layer != self.layermax:
             for i in range(4):
                 if self.branches[i] is not None:
-                    store[0] = store[0] + self.branches[i].pullData()[0]
-                    store[1] = store[1] + self.branches[i].pullData()[1]
+                    store[0] = store[0] + self.branches[i].pullLeaf()[0]
+                    store[1] = store[1] + self.branches[i].pullLeaf()[1]
             return store
                 
     
@@ -407,7 +495,7 @@ if __name__ == "__main__":
     
     small = father.punch((0,0), (12,12))
     tile = Tile(small, align=False)
-    tile.segment(2)
+    tile.toImg(.125,0.005)
     #tile.saveFile('smol_tile.txt', smol)
     #tile.saveFile('improved_save_2.txt')
     
